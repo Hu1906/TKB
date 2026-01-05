@@ -2,19 +2,41 @@ const { generateSchedules } = require('../services/schedulerService');
 
 const generateTKB = async (req, res) => {
   try {
-    // Lấy danh sách mã môn từ body request
-    // Ví dụ: { "subjectCodes": ["IT1110", "MI1111", "PH1111"] }
+    // Lấy dữ liệu từ body request
+    // Input có thể là:
+    // 1. Array (Cũ): ["IT1110", "MI1111"]
+    // 2. Object (Mới): { "IT1110": ["123456"], "MI1111": [] }
     const { subjectCodes } = req.body;
 
-    if (!subjectCodes || !Array.isArray(subjectCodes) || subjectCodes.length === 0) {
+    // --- KIỂM TRA DỮ LIỆU ĐẦU VÀO (VALIDATION) ---
+    const isArray = Array.isArray(subjectCodes);
+    const isObject = typeof subjectCodes === 'object' && subjectCodes !== null && !isArray;
+
+    let isValid = false;
+    
+    // Nếu là Array: Không được rỗng
+    if (isArray && subjectCodes.length > 0) {
+        isValid = true;
+    }
+    // Nếu là Object: Phải có ít nhất 1 key (môn học)
+    else if (isObject && Object.keys(subjectCodes).length > 0) {
+        isValid = true;
+    }
+
+    if (!isValid) {
       return res.status(400).json({ 
-        message: "Vui lòng gửi danh sách mã môn học (Array)." 
+        message: "Vui lòng gửi danh sách môn học hợp lệ (Array mã môn hoặc Object kèm mã lớp)." 
       });
     }
 
-    console.log(`Đang xếp lịch cho các môn: ${subjectCodes.join(", ")}...`);
+    // Log thông tin để debug
+    if (isArray) {
+        console.log(`Đang xếp lịch (Mode: Auto) cho các môn: ${subjectCodes.join(", ")}...`);
+    } else {
+        console.log(`Đang xếp lịch (Mode: Filter) cho các môn: ${Object.keys(subjectCodes).join(", ")}...`);
+    }
 
-    // Gọi service xử lý
+    // Gọi service xử lý (Service đã update để nhận cả 2 loại input)
     const result = await generateSchedules(subjectCodes);
 
     if (!result.success) {
