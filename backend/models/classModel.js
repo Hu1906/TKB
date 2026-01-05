@@ -6,6 +6,7 @@ const classSchema = new Mongoose.Schema({
     class_included_id: { type: String }, // Mã lớp kèm theo
     note: { type: String }, // Ghi chú
     class_type: { type: String, required: true }, // Loại lớp học phần
+    subject_type: { type: String }, // Loại môn học phần
 
     sessions: [{
     day: Number,              // Thứ (2, 3, 4, 5, 6, 7)

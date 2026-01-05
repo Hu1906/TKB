@@ -80,6 +80,7 @@ async function parseExcel(filePath) {
                 class_included_id: row['Mã_lớp_kèm'],
                 class_type: row['Loại_lớp'],
                 note: row['Ghi_chú'],
+                subject_type: row['Mã_QL'],
                 sessions: session.day ? [session] : []
             });
         }
