@@ -1,21 +1,37 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+@theme {
+  --color-hust-primary: #b30000; /* HUST often uses red, but reference site uses Green? Let's check. */
+    /* Reference site is Green-ish. Let's inspect the screenshot again or stick to "Green" as planned. */
+    /* Screenshot showed green header. Let's use a nice Green palette. */
+    --color-hust-green: #2e7d32;
+    --color-hust-green-light: #4caf50;
+    --color-hust-green-dark: #1b5e20;
 }
 
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+:root {
+  --hust-red: #cc0000; /* Official HUST logo red */
+  --pk-green: #00703c; /* Common 'Green' theme for many edu sites, similar to reference */
 }
 
-#root {
-  min-height: 100vh;
+@layer base {
+  body {
+    @apply bg-gray-50 text-gray-900;
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
 }
