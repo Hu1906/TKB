@@ -1,7 +1,15 @@
 const classModel = require('../models/classModel');
 
 async function getClassesBySubject(subjectId, subjectType) {
-    const classes = await classModel.find({ subject_id: subjectId, subject_type: subjectType }).sort({ class_id: 1 });
+    const query = { subject_id: subjectId };
+    
+    // Nếu có subjectType thì filter thêm
+    if (subjectType) {
+        query.subject_type = subjectType;
+    }
+    
+    const classes = await classModel.find(query).sort({ class_id: 1 });
     return classes;
 }
+
 module.exports = { getClassesBySubject };

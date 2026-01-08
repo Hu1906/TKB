@@ -1,13 +1,15 @@
-const { getClassesBySubject } = require('../services/getClassesBySubject');
+const { getClassesBySubject: getClasses } = require('../services/getClass');
 
 async function getClassesBySubject(req, res) {
     try {
         const subjectId = req.params.subjectId;
-        const subjectType = req.body.subjectType; 
-        const classes = await getClassesBySubject(subjectId, subjectType);
+        const subjectType = req.query.subjectType; // Lấy từ query string thay vì body
+        
+        const classes = await getClasses(subjectId, subjectType);
         res.status(200).json(classes);
     } catch (error) {
-        res.status(500).json({ message: 'Lỗi ở backend/controller khi lấy lớp học theo môn học' });
+        console.error('Error in getClassesBySubject:', error);
+        res.status(500).json({ message: 'Lỗi khi lấy danh sách lớp học' });
     }
 }
 
