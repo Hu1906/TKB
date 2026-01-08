@@ -6,13 +6,33 @@ const subjectModel = require('../models/subjectModel');
 
 const importData = async (req, res) => {
     try {
-        DB.connectDB();
-        const result = await parseExcelService.parseExcelFile('data/data.xlsx');
-        // Lưu dữ liệu vào database
-        classModel.insertMany(result.classes);
-        subjectModel.insertMany(result.subjects);
-        res.status(200).json({ message: 'Data imported successfully' });
-        DB.disconnectDB();
+        await DB.connectDB();
+        const result = await parseExcelService.parseExcel('../backend/config/TKB20252-FULL.xlsx');
+        
+        console.log('Đang xóa dữ liệu cũ...');
+        await classModel.deleteMany({});
+        await subjectModel.deleteMany({});
+
+        // 4. Lưu dữ liệu mới vào database
+        console.log('Đang lưu dữ liệu mới...');
+        
+        if (result.subjects.length > 0) {
+            await subjectModel.insertMany(result.subjects);
+            console.log(`Đã import ${result.subjects.length} môn học.`);
+        }
+        
+        if (result.classes.length > 0) {
+            await classModel.insertMany(result.classes);
+            console.log(`Đã import ${result.classes.length} lớp học.`);
+        }
+        res.status(200).json({ 
+            message: 'Import dữ liệu thành công!',
+            stats: {
+                subjects: result.subjects.length,
+                classes: result.classes.length
+            }
+        });
+        await DB.disconnectDB();
     } catch (error) {
         console.error('Error importing data:', error);
         res.status(500).json({ message: 'Error importing data' });

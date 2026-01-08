@@ -16,3 +16,5 @@ const classSchema = new Mongoose.Schema({
     weeks: [Number]           // Mảng các tuần học (đã parse từ chuỗi "2-9,11-19")
   }]
 });
+const Class = Mongoose.model('Class', classSchema);
+module.exports = Class;
