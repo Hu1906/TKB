@@ -1,91 +1,45 @@
 import React, { useMemo } from 'react';
 
-// Maps start time string "HHmm" to Period number (1-12)
-const parsePeriod = (timeStr) => {
+// Constants for Time Grid
+const START_HOUR = 6;
+const END_HOUR = 18; // Until 18:00
+const SLOT_MINUTES = 30;
+const TOTAL_SLOTS = (END_HOUR - START_HOUR) * (60 / SLOT_MINUTES); // (18-6) * 2 = 24 slots
+
+// Helper to convert "HHmm" string to minutes from midnight
+const timeToMinutes = (timeStr) => {
     if (!timeStr) return 0;
-    const t = parseInt(timeStr);
-    // Morning
-    if (t <= 645) return 1;
-    if (t <= 730) return 2;
-    if (t <= 825) return 3;
-    if (t <= 920) return 4;
-    if (t <= 1015) return 5;
-    if (t <= 1100) return 6;
-    // Afternoon
-    if (t <= 1230) return 7;
-    if (t <= 1315) return 8;
-    if (t <= 1410) return 9;
-    if (t <= 1505) return 10;
-    if (t <= 1600) return 11;
-    if (t <= 1645) return 12;
-    return 1; // Default
+    const h = parseInt(timeStr.slice(0, -2) || 0); // Handle "645" as "6" "45" logic needs padding if length < 4 but usually backend sends "0645" or "1230"
+    // Better safely parse:
+    const num = parseInt(timeStr);
+    const hour = Math.floor(num / 100);
+    const min = num % 100;
+    return hour * 60 + min;
 };
 
-const getPeriodCount = (startStr, endStr) => {
-    // Basic approximation: subtract times or periods
-    // Since we don't have exact end times mapping to period ends in the same way, 
-    // let's use the property that periods are roughly 45-50 mins.
-    // However, easier way: 
-    // Start Period = parsePeriod(startStr)
-    // End Period = parsePeriod(endStr) - 1? No, endStr is when it ends.
-    // If endStr is 0730, it ended at the end of Period 1? No, 7:30 is start of Period 2.
-    // Usually end_time provided by HUST data is the END of the session.
-
-    // Let's refine based on typical durations.
-    // If start 0645 end 0815 => Period 1 & 2.
-    // parse(0645) = 1. parse(0815) = 2 (start of 2).
-    // Actually, let's look at the data if possible. But better logic:
-    // Map End Times specifically.
-    // 0730 -> End of P1
-    // 0815 -> End of P2
-    // 0910 -> End of P3
-    // 1005 -> End of P4
-    // 1100 -> End of P5
-    // 1145 -> End of P6
-    // ...
-
-    // Let's rely on calculating Start Period and "Duration".
-    // Or just render absolute positions if we want. But Grid is easier with rows 1-12.
-
-    const s = parsePeriod(startStr);
-    // We need an "End Period" mapper.
-    const getEndPeriod = (tStr) => {
-        const t = parseInt(tStr);
-        if (t <= 730) return 1;
-        if (t <= 825) return 2; // 8:15 is end of P2
-        if (t <= 920) return 3; // 9:10
-        if (t <= 1015) return 4; // 10:05
-        if (t <= 1100) return 5;
-        if (t <= 1200) return 6; // 11:45
-
-        if (t <= 1315) return 7; // 13:15 is start of P8? No. 12:30-13:15
-        if (t <= 1410) return 8;
-        if (t <= 1505) return 9;
-        if (t <= 1600) return 10;
-        if (t <= 1645) return 11;
-        return 12;
-    };
-
-    const e = getEndPeriod(endStr);
-    return Math.max(1, e - s + 1);
+// Map minutes to Grid Row (1-based)
+const getGridRow = (minutes) => {
+    const startMinutes = START_HOUR * 60;
+    const row = Math.floor((minutes - startMinutes) / SLOT_MINUTES) + 1;
+    return Math.max(1, row);
 };
-
 
 export default function TimetableGrid({ schedule }) {
-    // Schedule is an array of Class objects, each has 'sessions'.
-
     const gridData = useMemo(() => {
-        const cells = []; // { day, startPeriod, duration, classData }
+        const cells = [];
         if (!schedule) return [];
 
         schedule.forEach(cls => {
             cls.sessions.forEach(sess => {
-                const startPeriod = parsePeriod(sess.start_time);
-                const duration = getPeriodCount(sess.start_time, sess.end_time);
+                const startMin = timeToMinutes(sess.start_time);
+                const endMin = timeToMinutes(sess.end_time);
+
+                const startRow = getGridRow(startMin);
+
                 cells.push({
-                    day: sess.day, // 2-8
-                    startPeriod,
-                    duration,
+                    day: sess.day,
+                    startMin,
+                    endMin,
                     cls,
                     sess
                 });
@@ -94,85 +48,106 @@ export default function TimetableGrid({ schedule }) {
         return cells;
     }, [schedule]);
 
-    const days = [2, 3, 4, 5, 6, 7, 8]; // 8 is Sunday usually in VN convention, or we map CN.
-    // HUST data: day 2 = Mon, ... 7 = Sat, 8 = Sun? Or 1? Usually 2-8.
-
-    const periods = Array.from({ length: 12 }, (_, i) => i + 1);
+    const days = [2, 3, 4, 5, 6, 7, 8];
+    const timeLabels = Array.from({ length: TOTAL_SLOTS + 1 }, (_, i) => {
+        const totalMin = START_HOUR * 60 + i * SLOT_MINUTES;
+        const h = Math.floor(totalMin / 60);
+        const m = totalMin % 60;
+        return `${h}:${m.toString().padStart(2, '0')}`;
+    });
 
     const getCellColor = (type) => {
         const t = type?.toUpperCase();
-        if (t === 'LT') return 'bg-blue-100 border-blue-200 text-blue-800';
-        if (t === 'BT') return 'bg-orange-100 border-orange-200 text-orange-800';
-        if (t === 'TH' || t === 'TN') return 'bg-red-100 border-red-200 text-red-800';
-        return 'bg-green-100 border-green-200 text-green-800';
+        if (t === 'LT') return 'bg-blue-100 border-blue-200 text-blue-800 hover:bg-blue-200';
+        if (t === 'BT') return 'bg-orange-100 border-orange-200 text-orange-800 hover:bg-orange-200';
+        if (t === 'TH' || t === 'TN') return 'bg-red-100 border-red-200 text-red-800 hover:bg-red-200';
+        return 'bg-green-100 border-green-200 text-green-800 hover:bg-green-200';
     };
 
+    // Total minutes in view
+    const TOTAL_VIEW_MINS = (END_HOUR - START_HOUR) * 60;
+
     return (
-        <div className="overflow-x-auto">
-            <div className="min-w-[800px] border border-gray-200 rounded-lg overflow-hidden bg-white">
-                {/* Header Row */}
-                <div className="grid grid-cols-8 bg-gray-50 border-b border-gray-200 text-center font-bold text-gray-700 text-sm">
-                    <div className="p-3 border-r">Tiết / Thứ</div>
+        <div className="overflow-x-auto border border-gray-200 rounded-lg bg-white shadow-sm">
+            <div className="min-w-[800px] relative">
+                {/* Header */}
+                <div className="grid grid-cols-8 border-b border-gray-200 bg-gray-50 text-sm font-bold text-gray-700 sticky top-0 z-10">
+                    <div className="p-3 text-center border-r">Giờ</div>
                     {days.map(d => (
-                        <div key={d} className="p-3 border-r last:border-0">
+                        <div key={d} className="p-3 text-center border-r last:border-0">
                             {d === 8 ? 'CN' : `Thứ ${d}`}
                         </div>
                     ))}
                 </div>
 
-                {/* Grid Rows */}
-                <div className="relative grid grid-cols-8 grid-rows-[repeat(12,minmax(50px,auto))]">
-                    {/* Time Column */}
-                    {periods.map(p => (
-                        <div key={p} className="row-span-1 border-r border-b last:border-b-0 border-gray-100 p-2 text-center text-xs font-medium text-gray-500 bg-gray-50 flex items-center justify-center">
-                            Tiết {p}
+                {/* Body */}
+                <div className="flex relative" style={{ height: '900px' }}> {/* Fixed height for calculation */}
+
+                    {/* Time Constants Column */}
+                    <div className="w-[12.5%] border-r border-gray-200 bg-gray-50 text-xs text-gray-500 font-medium relative opacity-80 select-none">
+                        {timeLabels.map((label, i) => {
+                            // Don't show last label to avoid overflow or overlap
+                            if (i === timeLabels.length - 1 && i % 2 !== 0) return null;
+
+                            return (
+                                <div
+                                    key={i}
+                                    className="absolute w-full text-right pr-2 -translate-y-1/2 border-t border-transparent" // Center label on the tick
+                                    style={{ top: `${(i * SLOT_MINUTES / TOTAL_VIEW_MINS) * 100}%` }}
+                                >
+                                    {i % 2 === 0 && label} {/* Show only hourly labels for cleanliness, or halves too? */}
+                                </div>
+                            )
+                        })}
+                    </div>
+
+                    {/* Day Columns */}
+                    {days.map((day, dayIdx) => (
+                        <div key={day} className="w-[12.5%] border-r border-gray-100 last:border-0 relative">
+                            {/* Horizontal Grid lines */}
+                            {timeLabels.map((_, i) => (
+                                <div
+                                    key={i}
+                                    className={`absolute w-full border-t ${i % 2 === 0 ? 'border-gray-200' : 'border-gray-50'}`}
+                                    style={{ top: `${(i * SLOT_MINUTES / TOTAL_VIEW_MINS) * 100}%` }}
+                                />
+                            ))}
+
+                            {/* Classes for this day */}
+                            {gridData.filter(item => item.day === day).map((item, idx) => {
+                                // Calculate Top and Height percentages
+                                const startMinsFromBase = item.startMin - (START_HOUR * 60);
+                                const duration = item.endMin - item.startMin;
+
+                                const topPct = (startMinsFromBase / TOTAL_VIEW_MINS) * 100;
+                                const heightPct = (duration / TOTAL_VIEW_MINS) * 100;
+
+                                return (
+                                    <div
+                                        key={idx}
+                                        className={`absolute left-1 right-1 rounded border shadow-sm p-1.5 flex flex-col justify-start overflow-hidden text-[10px] leading-tight cursor-pointer transition-all z-10 hover:z-50 hover:shadow-md ${getCellColor(item.cls.class_type)}`}
+                                        style={{
+                                            top: `${topPct}%`,
+                                            height: `${heightPct}%`,
+                                        }}
+                                        title={`${item.cls.class_id} (${item.cls.class_type})\n${item.cls.subject_id}\n${item.sess.start_time} - ${item.sess.end_time}\nPhòng: ${item.sess.room}\nNote: ${item.cls.note || ''}`}
+                                    >
+                                        <div className="font-bold flex justify-between">
+                                            <span>{item.sess.start_time}-{item.sess.end_time}</span>
+                                            <span className="opacity-75 uppercase">{item.cls.class_type}</span>
+                                        </div>
+                                        <div className="font-bold truncate" title={item.cls.class_id}>{item.cls.class_id}</div>
+                                        <div className="truncate font-medium">{item.cls.subject_id}</div>
+                                        <div className="truncate font-medium">{item.sess.room}</div>
+                                        {item.cls.note && (
+                                            <div className="italic opacity-75 border-t border-black/10 mt-0.5 pt-0.5 whitespace-normal break-words flex-1 overflow-auto min-h-0 text-[11px] leading-tight">
+                                                {item.cls.note}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
                         </div>
-                    ))}
-
-                    {/* Empty Cells Background (for visual structure) - Optional, 
-                        but effectively we are placing absolute or using row-start/row-span 
-                    */}
-
-                    {/* 
-                       Better approach with Grid:
-                       We are inside a Grid Container.
-                       Columns: 8 (1 for label, 7 for days).
-                       Rows: 12.
-                    */}
-
-                    {/* Place items */}
-                    {gridData.map((item, idx) => {
-                        // Grid Column: Day - 1 (since 2->Col 2, 3->Col 3...) + 1 offset?
-                        // Days are 2,3,4,5,6,7,8.
-                        // Grid Cols 1 (Label), 2(Mon/2), 3(Tue/3)... 8(Sun/8).
-                        const colStart = item.day; // Direct mapping if we start days from 2 at col 2.
-                        // But verifying: col 1 is Label. So Day 2 needs to be at Col 2.
-
-                        return (
-                            <div
-                                key={idx}
-                                style={{
-                                    gridColumn: `${colStart} / span 1`,
-                                    gridRow: `${item.startPeriod} / span ${item.duration}`,
-                                }}
-                                className={`m-1 p-2 rounded text-xs border shadow-sm flex flex-col justify-between overflow-hidden cursor-pointer hover:brightness-95 transition-all ${getCellColor(item.cls.class_type)}`}
-                                title={`${item.cls.class_id} - ${item.cls.class_type}`}
-                            >
-                                <div className="font-bold truncate">{item.cls.class_id}</div>
-                                <div className="truncate opacity-80">{item.sess.room}</div>
-                            </div>
-                        );
-                    })}
-
-                    {/* Fillers for grid lines */}
-                    {days.map((d, dayIdx) => (
-                        periods.map(p => (
-                            <div
-                                key={`${d}-${p}`}
-                                className="border-r border-b border-gray-100 pointer-events-none"
-                                style={{ gridColumn: dayIdx + 2, gridRow: p }}
-                            />
-                        ))
                     ))}
                 </div>
             </div>

@@ -1,170 +1,290 @@
 const ClassModel = require('../models/classModel');
 
+// ---------------------------------------------------------
+// PHẦN 1: UTILS & PRE-COMPUTATION
+// ---------------------------------------------------------
+
 /**
- * ---------------------------------------------------------
- * PHẦN 1: CÁC HÀM KIỂM TRA XUNG ĐỘT (CONFLICT CHECKERS)
- * ---------------------------------------------------------
+ * Pre-process class data for faster conflict checks.
  */
+const processClassData = (cls) => {
+  const processedSessions = cls.sessions.map(sess => {
+    let weekMask = 0n;
+    if (sess.weeks) {
+      for (const w of sess.weeks) {
+        weekMask |= (1n << BigInt(w));
+      }
+    }
+    const start = parseInt(sess.start_time);
+    const end = parseInt(sess.end_time);
+    return { day: sess.day, start, end, weekMask };
+  });
 
-// Kiểm tra 2 mảng tuần có phần tử chung không
-const hasCommonWeek = (weeksA, weeksB) => {
-  if (!weeksA || !weeksB) return false;
-  for (const wA of weeksA) {
-    if (weeksB.includes(wA)) return true;
-  }
-  return false;
+  return {
+    id: cls.class_id,
+    subject_id: cls.subject_id,
+    class_type: cls.class_type, // Vital for grouping
+    processedSessions,
+    original: cls
+  };
 };
 
-// Kiểm tra trùng lịch giữa 2 khung giờ (Session)
-// Sử dụng start_time/end_time dạng String ("0645", "1230")
-const isSessionConflict = (sessionA, sessionB) => {
-  // 1. Khác ngày -> Không trùng
-  if (sessionA.day !== sessionB.day) return false;
-
-  // 2. Không cùng tuần học -> Không trùng
-  if (!hasCommonWeek(sessionA.weeks, sessionB.weeks)) return false;
-
-  // 3. Kiểm tra giao nhau về thời gian (String Comparison)
-  // Vì định dạng giờ là HHmm (VD: "0645", "1230") nên có thể so sánh chuỗi trực tiếp.
-  // Công thức Overlap: max(startA, startB) <= min(endA, endB)
-  // Nếu A xong trước khi B bắt đầu, hoặc B xong trước khi A bắt đầu -> Không trùng
-
-  // Logic ngược: Không trùng khi (EndA < StartB) hoặc (EndB < StartA)
-  // => Trùng khi: !(EndA < StartB || EndB < StartA)
-  // => Trùng khi: EndA >= StartB && EndB >= StartA
-
-  if (sessionA.end_time >= sessionB.start_time && sessionB.end_time >= sessionA.start_time) {
-    return true;
-  }
-
-  return false;
-};
-
-// Kiểm tra trùng lịch giữa 2 Lớp học (Class Object)
-const isClassConflict = (classA, classB) => {
-  for (const sesA of classA.sessions) {
-    for (const sesB of classB.sessions) {
-      if (isSessionConflict(sesA, sesB)) return true;
+/**
+ * Check conflict between two processed classes.
+ */
+const checkConflict = (pClassA, pClassB) => {
+  for (const sA of pClassA.processedSessions) {
+    for (const sB of pClassB.processedSessions) {
+      if (sA.day !== sB.day) continue;
+      if ((sA.weekMask & sB.weekMask) === 0n) continue;
+      if (sA.end >= sB.start && sB.end >= sA.start) return true;
     }
   }
   return false;
 };
 
-/**
- * ---------------------------------------------------------
- * PHẦN 2: THUẬT TOÁN QUAY LUI (BACKTRACKING)
- * ---------------------------------------------------------
- */
+// ---------------------------------------------------------
+// PHẦN 2: GENERATE CONFIGURATIONS (ENSEMBLES)
+// ---------------------------------------------------------
 
 /**
- * Hàm tạo thời khóa biểu dựa trên danh sách lớp được chọn.
- * @param {Array} subjectsRequest - Danh sách yêu cầu từ Frontend.
- * Cấu trúc input mong đợi:
- * [
- * { subjectCode: "IT1110", classCodes: ["123456", "123457"] }, // Chỉ xếp 2 lớp này
- * { subjectCode: "MI1111", classCodes: [] } // Nếu rỗng -> Hiểu là lấy TẤT CẢ lớp của môn này 
- * ]
+ * Generates valid "Ensembles" (combinations of classes) for a single subject
+ * based on HUST rules:
+ * - Theory part: (LT+BT) OR (LT + BT) OR (LT if no BT) OR (BT if no LT - rare)
+ * - Experiment part: If TN exists, MUST pick one TN.
+ * 
+ * @param {Array} processedClasses - All processed classes for this subject
+ * @returns {Array} Array of Ensembles. Each Ensemble is an Array of ProcessedClasses.
  */
+const generateSubjectEnsembles = (processedClasses) => {
+  const types = {
+    'LT': [],
+    'BT': [],
+    'LT+BT': [],
+    'TN': [],
+    'OTHER': []
+  };
+
+  // Group by type
+  // Normalize type: "lt", "LT", "Lt" -> "LT"
+  for (const pCls of processedClasses) {
+    let t = pCls.class_type ? pCls.class_type.toUpperCase().trim() : 'OTHER';
+    // Handle variations if potential data dirtiness? 
+    if (t === 'TH') t = 'TN'; // Sometimes TH/TN used interchangeably for practice/experiment? HUST usually TN. TH is Thuc Hanh.
+    // Let's assume standard: LT, BT, LT+BT, TN.
+
+    if (types[t]) types[t].push(pCls);
+    else types['OTHER'].push(pCls);
+  }
+
+  // 1. Generate Base Options (Theory/Exercise Component)
+  let baseOptions = []; // Array of [pClass] or [pClass1, pClass2]
+
+  const hasCombine = types['LT+BT'].length > 0;
+  const hasLT = types['LT'].length > 0;
+  const hasBT = types['BT'].length > 0;
+
+  // Strategy:
+  // If LT+BT exists, they are valid base options.
+  if (hasCombine) {
+    types['LT+BT'].forEach(c => baseOptions.push([c]));
+  }
+
+  // If separate LT and BT exist, pairs are valid options.
+  if (hasLT && hasBT) {
+    // Cross product LT x BT
+    // Check internal conflict!
+    for (const lt of types['LT']) {
+      for (const bt of types['BT']) {
+        if (!checkConflict(lt, bt)) {
+          baseOptions.push([lt, bt]);
+        }
+      }
+    }
+  } else if (hasLT && !hasBT && !hasCombine) {
+    // Only LT available (maybe pure theory subject)
+    types['LT'].forEach(c => baseOptions.push([c]));
+  } else if (!hasLT && hasBT && !hasCombine) {
+    // Only BT? Rare.
+    types['BT'].forEach(c => baseOptions.push([c]));
+  } else if (!hasCombine && !hasLT && !hasBT) {
+    // Maybe "OTHER" or empty types?
+    types['OTHER'].forEach(c => baseOptions.push([c]));
+  }
+
+  // If we have both (LT+BT) AND (LT, BT), we now have both types of options in baseOptions.
+  // If baseOptions is empty but we have classes? (e.g. only TN?). 
+  // If only TN exists, likely a "Thinking" error or it's a special lab subject.
+  // But usually TN is attached to a course.
+  // If baseOptions is empty here, we might fall back to "Pick any 1 class" logic?
+  if (baseOptions.length === 0 && processedClasses.length > 0 && types['TN'].length === 0) {
+    // Fallback: Treat every class as a standalone option if not TN
+    processedClasses.filter(c => c.class_type !== 'TN').forEach(c => baseOptions.push([c]));
+  }
+
+
+  // 2. Add Experiment (TN) Component
+  // If TN exists, we must cross-product BaseOptions x TN
+  const tnClasses = types['TN'];
+  if (tnClasses.length > 0) {
+    const finalEnsembles = [];
+    // If BaseOptions empty (e.g. strict Lab course?), use empty base?
+    // Let's assume if baseOptions empty, we just pick TN?
+    if (baseOptions.length === 0) {
+      tnClasses.forEach(tn => finalEnsembles.push([tn]));
+    } else {
+      for (const base of baseOptions) {
+        for (const tn of tnClasses) {
+          // Check conflict between TN and Base classes
+          let isCompatible = true;
+          for (const baseCls of base) {
+            if (checkConflict(baseCls, tn)) {
+              isCompatible = false;
+              break;
+            }
+          }
+          if (isCompatible) {
+            finalEnsembles.push([...base, tn]);
+          }
+        }
+      }
+    }
+    return finalEnsembles;
+  }
+
+  return baseOptions;
+};
+
+
+// ---------------------------------------------------------
+// PHẦN 3: THUẬT TOÁN QUAY LUI (MAIN)
+// ---------------------------------------------------------
+
 const generateSchedules = async (inputData) => {
   try {
     let subjectCodes = [];
-    let specificClassIds = {}; // Map: SubjectCode -> [ClassID1, ClassID2]
+    let specificClassIds = {};
 
-  
     if (Array.isArray(inputData)) {
-      // Case 1: Input là mảng mã môn -> ["IT1110", "MI1111"]
-      // Mặc định là lấy tất cả các lớp
       subjectCodes = inputData;
     } else if (typeof inputData === 'object' && inputData !== null) {
-      // Case 2: Input là Object -> { "IT1110": ["123456"], "MI1111": [] }
-      // Key là mã môn, Value là danh sách mã lớp muốn học (Rỗng = lấy hết)
       subjectCodes = Object.keys(inputData);
       specificClassIds = inputData;
     } else {
-      throw new Error("Dữ liệu đầu vào không hợp lệ. Cần là Array hoặc Object.");
+      throw new Error("Dữ liệu đầu vào không hợp lệ.");
     }
 
     if (subjectCodes.length === 0) {
       return { success: false, message: "Không có môn học nào được chọn." };
     }
 
-    // Bước 1: Lấy dữ liệu từ MongoDB
-    // Vẫn lấy tất cả các lớp thuộc danh sách môn để xử lý
+    // 1. Fetch Data
     const allClasses = await ClassModel.find({
       subject_id: { $in: subjectCodes }
     });
 
-    // Bước 2: Gom nhóm các lớp theo môn học & Áp dụng bộ lọc (Filter)
-    const classesBySubject = {};
+    // 2. Build Options per Subject
+    const optionsBySubject = {}; // { IT1110: [ [ClassA], [ClassB, ClassC]... ] }
+    let totalOptions = 0;
 
     for (const code of subjectCodes) {
       let classesOfSubject = allClasses.filter(c => c.subject_id === code);
+      const allowed = specificClassIds[code];
 
-      // LOGIC MỚI: Lọc theo danh sách lớp cụ thể nếu có yêu cầu
-      const allowedClasses = specificClassIds[code];
-      if (allowedClasses && Array.isArray(allowedClasses) && allowedClasses.length > 0) {
-        // Chỉ giữ lại các lớp có class_id nằm trong danh sách người dùng chọn
-        classesOfSubject = classesOfSubject.filter(c => allowedClasses.includes(c.class_id));
+      // Filter specific classes first? 
+      // Warning: If we filter specific classes, we might break LT+BT pairing if user selects only LT.
+      // But assume user selects "Course" or "Specific Classes".
+      // If specific classes provided, we only use those.
+      if (allowed && Array.isArray(allowed) && allowed.length > 0) {
+        classesOfSubject = classesOfSubject.filter(c => allowed.includes(c.class_id));
       }
 
-      // Kiểm tra nếu sau khi lọc mà không còn lớp nào
       if (classesOfSubject.length === 0) {
-        return {
-          success: false,
-          message: `Môn học ${code} không tìm thấy lớp phù hợp (hoặc mã lớp bạn chọn không tồn tại).`
-        };
+        return { success: false, message: `Môn học ${code} không có lớp phù hợp.` };
       }
-      classesBySubject[code] = classesOfSubject;
+
+      const processed = classesOfSubject.map(processClassData);
+      const ensembles = generateSubjectEnsembles(processed);
+
+      if (ensembles.length === 0) {
+        return { success: false, message: `Không tìm thấy tổ hợp lớp hợp lệ cho môn ${code} (ví dụ: thiếu lớp BT hoặc TN tương thích).` };
+      }
+
+      optionsBySubject[code] = ensembles;
+      totalOptions += ensembles.length;
     }
 
-    // Bước 3: Chạy thuật toán Backtracking
-    const validSchedules = [];
-    const LIMIT_RESULTS = 1000;
+    // 3. MRV Sort
+    subjectCodes.sort((a, b) => optionsBySubject[a].length - optionsBySubject[b].length);
 
-    const backtrack = (subjectIndex, currentSchedule) => {
-      // Điều kiện dừng
+    // 4. Backtracking
+    const validSchedules = [];
+    const LIMIT_RESULTS = 500;
+
+    // Cache conflicts between SINGLE classes to speed up Ensemble checks?
+    // Or just checking Ensemble vs Ensemble on the fly.
+    // Ensemble size is small (1-3). checking EnsembleA vs EnsembleB is 1*1 to 3*3 = 9 checks max. Very fast.
+    // Conflict Matrix for individual classes is still useful.
+
+    // Let's build global conflict map for all individual classes involved.
+    const allInvolvedClasses = Object.values(optionsBySubject).flat().flat(); // Flatten Ensembles -> Flatten Classes
+    // ... (Optional: Build Map if performance needed. skipping for code clarity unless slow).
+    // Direct checks are sufficient for <1000 classes.
+
+    const backtrack = (subjectIndex, currentClasses) => {
       if (validSchedules.length >= LIMIT_RESULTS) return;
 
-      // Base case: Đã xếp đủ môn
       if (subjectIndex === subjectCodes.length) {
-        validSchedules.push([...currentSchedule]);
+        const fullSchedule = currentClasses.map(p => p.original);
+        validSchedules.push(fullSchedule);
         return;
       }
 
-      const currentSubjectCode = subjectCodes[subjectIndex];
-      const candidates = classesBySubject[currentSubjectCode];
+      const code = subjectCodes[subjectIndex];
+      const ensembles = optionsBySubject[code];
 
-      // Thử chọn từng lớp trong danh sách ứng viên
-      for (const candidateClass of candidates) {
+      for (const ensemble of ensembles) {
+        // Check if this ensemble conflicts with anything in currentClasses
         let isSafe = true;
 
-        // Kiểm tra trùng lịch với các lớp đã chọn
-        for (const existingClass of currentSchedule) {
-          if (isClassConflict(candidateClass, existingClass)) {
-            isSafe = false;
-            break;
+        // Loop current picked classes
+        for (const picked of currentClasses) {
+          // Loop classes in candidate ensemble
+          for (const candidate of ensemble) {
+            if (checkConflict(candidate, picked)) {
+              isSafe = false;
+              break;
+            }
           }
+          if (!isSafe) break;
         }
 
         if (isSafe) {
-          currentSchedule.push(candidateClass);
-          backtrack(subjectIndex + 1, currentSchedule);
-          currentSchedule.pop(); // Backtrack
+          // Push all classes of ensemble
+          // Optimization: currentClasses.push(...ensemble)
+          // But need to pop correctly.
+          const len = currentClasses.length;
+          for (const c of ensemble) currentClasses.push(c);
+
+          backtrack(subjectIndex + 1, currentClasses);
+
+          // Pop back
+          while (currentClasses.length > len) currentClasses.pop();
         }
       }
     };
 
-    // Bắt đầu đệ quy
     backtrack(0, []);
 
     return {
       success: true,
-      data: validSchedules,
+      schedules: validSchedules, // Each schedule is [ClassObj, ClassObj...]
       total_found: validSchedules.length,
       limit_reached: validSchedules.length >= LIMIT_RESULTS
     };
+
   } catch (error) {
-    console.error("Lỗi thuật toán xếp lịch:", error);
+    console.error("Scheduler Error:", error);
     throw error;
   }
 };

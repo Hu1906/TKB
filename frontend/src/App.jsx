@@ -8,6 +8,7 @@ import { Upload, Calendar, ArrowLeft, ArrowRight, Loader2 } from 'lucide-react';
 
 export default function App() {
     const [selectedSubjects, setSelectedSubjects] = useState([]); // Array of full subject objects
+    const [selectedClasses, setSelectedClasses] = useState({}); // { subjectId: [classIds] or null (all) }
     const [schedules, setSchedules] = useState([]);
     const [currentScheduleIndex, setCurrentScheduleIndex] = useState(0);
     const [loading, setLoading] = useState(false);
@@ -16,11 +17,23 @@ export default function App() {
     const handleAddSubject = (subject) => {
         if (!selectedSubjects.find(s => s.subject_id === subject.subject_id)) {
             setSelectedSubjects([...selectedSubjects, subject]);
+            // Default select all (null)
+            setSelectedClasses(prev => ({ ...prev, [subject.subject_id]: null }));
         }
     };
 
     const handleRemoveSubject = (code) => {
         setSelectedSubjects(selectedSubjects.filter(s => s.subject_id !== code));
+        const newClasses = { ...selectedClasses };
+        delete newClasses[code];
+        setSelectedClasses(newClasses);
+    };
+
+    const handleUpdateClassSelection = (subjectId, classIds) => {
+        setSelectedClasses(prev => ({
+            ...prev,
+            [subjectId]: classIds
+        }));
     };
 
     const handleGenerate = async () => {
@@ -28,9 +41,22 @@ export default function App() {
         setLoading(true);
         setError(null);
         try {
-            // Backend expects array of codes ["IT1110", "MI1111"]
-            const codes = selectedSubjects.map(s => s.subject_id);
-            const result = await generateSchedule(codes);
+            // Construct payload
+            // If all selectedClasses values are null => use Array format (backward compatibility or simpler)
+            // But we can just use the Object format consistently: { SubjectID: [ClassIDs] }
+            // API expects: { "IT1110": ["123456"], "MI1111": [] (means all) }
+
+            const payload = {};
+            selectedSubjects.forEach(s => {
+                const specific = selectedClasses[s.subject_id];
+                // If specific is null => ALL => send empty array []
+                // If specific is array => send that array
+                payload[s.subject_id] = specific || [];
+            });
+
+            console.log("Sending payload:", payload);
+            const result = await generateSchedule(payload);
+
             if (result.schedules && result.schedules.length > 0) {
                 setSchedules(result.schedules);
                 setCurrentScheduleIndex(0);
@@ -84,6 +110,8 @@ export default function App() {
                             <CourseList
                                 subjects={selectedSubjects}
                                 onRemoveSubject={handleRemoveSubject}
+                                selectedClasses={selectedClasses}
+                                onUpdateSelection={handleUpdateClassSelection}
                             />
                         </div>
 

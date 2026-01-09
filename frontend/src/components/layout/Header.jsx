@@ -16,7 +16,7 @@ export default function Header() {
                 </div>
 
                 <div className="text-sm font-medium opacity-90 hidden sm:block">
-                    Học kỳ 2024.2
+                    Học kỳ 2025.2
                 </div>
             </div>
         </header>
