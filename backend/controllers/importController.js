@@ -7,7 +7,7 @@ const importData = async (req, res) => {
     try {
         // Use absolute path relative to project root or use the uploaded file if applicable
         // valid way: path.join(__dirname, '../config/TKB20252-FULL.xlsx')
-        const excelPath = path.join(__dirname, '../config/TKB20252-FULL.xlsx');
+        const excelPath = path.join(__dirname, '../config/TKB20252-FULL (2).xlsx');
 
         const result = await parseExcelService.parseExcel(excelPath);
 

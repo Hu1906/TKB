@@ -9,7 +9,7 @@ export default function MainLayout({ children }) {
                 {children}
             </main>
             <footer className="bg-white border-t py-6 text-center text-gray-500 text-sm">
-                <p>&copy; <b>Copyrights Nguyễn Kim Huy 20235106 IT1_07_K68</b> </p>
+                <p>&copy; <b>Nguyễn Kim Huy 20235106 IT1_07_K68</b> </p>
             </footer>
         </div>
     );

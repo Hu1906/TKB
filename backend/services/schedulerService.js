@@ -1,3 +1,4 @@
+const ClassModel = require('../models/classModel');
 // ---------------------------------------------------------
 // PHẦN 1: UTILS & PRE-COMPUTATION
 // ---------------------------------------------------------
@@ -15,7 +16,7 @@ const processClassData = (cls) => {
     let weekMask = 0n;
     if (sess.weeks) {
       for (const w of sess.weeks) {
-        weekMask |= (1n << BigInt(w));
+        weekMask |= (1n << BigInt(Math.floor(w)));
       }
     }
 
@@ -95,6 +96,8 @@ const generateSchedules = async (inputData) => {
       subject_id: { $in: subjectCodes }
     });
 
+    console.log(`[DEBUG] Fetched ${allClasses.length} total classes for subjects: ${subjectCodes.join(", ")}`);
+
     // 2. Group & Filter & Pre-process
     const candidatesBySubject = {}; // { subjectCode: [ProcessedClass] }
     let totalCandidates = 0;
@@ -155,7 +158,7 @@ const generateSchedules = async (inputData) => {
 
     // 5. Backtracking
     const validSchedules = [];
-    const LIMIT_RESULTS = 500; // Limit to 500 best results
+    const LIMIT_RESULTS = 1000; // Limit to 500 best results
 
     const backtrack = (subjectIndex, currentScheduleIds) => {
       if (validSchedules.length >= LIMIT_RESULTS) return;
@@ -196,8 +199,11 @@ const generateSchedules = async (inputData) => {
 
     backtrack(0, []);
 
+    console.log(`[DEBUG] Backtracking complete. Found ${validSchedules.length} valid schedules out of ${totalCandidates} total candidates.`);
+
     return {
-      success: true,
+      success: validSchedules.length > 0,
+      message: validSchedules.length === 0 ? "Không tìm thấy phương án xếp lịch nào phù hợp." : "Xếp lịch thành công!",
       schedules: validSchedules,
       total_found: validSchedules.length,
       limit_reached: validSchedules.length >= LIMIT_RESULTS

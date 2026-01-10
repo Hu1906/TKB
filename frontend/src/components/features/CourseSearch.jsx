@@ -63,7 +63,7 @@ export default function CourseSearch({ onAddSubject, selectedSubjectIds = [] }) 
                     {loading ? <Loader2 size={18} className="animate-spin" /> : <Search size={18} />}
                 </div>
             </div>
-
+            
             {isOpen && results.length > 0 && (
                 <div className="absolute z-50 w-full mt-1 bg-white rounded-lg shadow-xl border border-gray-100 max-h-80 overflow-y-auto">
                     {results.map((subject) => {
@@ -97,6 +97,7 @@ export default function CourseSearch({ onAddSubject, selectedSubjectIds = [] }) 
                     })}
                 </div>
             )}
+
 
             {isOpen && query && !loading && results.length === 0 && (
                 <div className="absolute z-50 w-full mt-1 bg-white rounded-lg shadow-xl border border-gray-100 p-4 text-center text-gray-500 text-sm">

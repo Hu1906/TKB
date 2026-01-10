@@ -1,14 +1,14 @@
 const Mongoose = require('mongoose');
 
 const classSchema = new Mongoose.Schema({
-    class_id: { type: String, required: true }, // Mã lớp học phần
-    subject_id: { type: String, required: true }, // Mã học phần
-    class_included_id: { type: String }, // Mã lớp kèm theo
-    note: { type: String }, // Ghi chú
-    class_type: { type: String, required: true }, // Loại lớp học phần
-    subject_type: { type: String }, // Loại môn học phần
+  class_id: { type: String, required: true }, // Mã lớp học phần
+  subject_id: { type: String, required: true }, // Mã học phần
+  class_included_id: { type: String }, // Mã lớp kèm theo
+  note: { type: String }, // Ghi chú
+  class_type: { type: String, required: true }, // Loại lớp học phần
+  subject_type: { type: String }, // Loại môn học phần
 
-    sessions: [{
+  sessions: [{
     day: Number,              // Thứ (2, 3, 4, 5, 6, 7)
     start_time: String,     // Thời gian bắt đầu (BĐ)
     end_time: String,       // Thời gian kết thúc (KT)
@@ -16,5 +16,5 @@ const classSchema = new Mongoose.Schema({
     weeks: [Number]           // Mảng các tuần học (đã parse từ chuỗi "2-9,11-19")
   }]
 });
-const Class = Mongoose.model('Class', classSchema);
+const Class = Mongoose.models.Class || Mongoose.model('Class', classSchema);
 module.exports = Class;

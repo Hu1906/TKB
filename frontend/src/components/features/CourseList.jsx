@@ -114,6 +114,12 @@ const CourseItem = ({ subject, onRemove, selectedClassIds, onUpdateSelection }) 
                                     onClick={() => onUpdateSelection(subject.subject_id, null)} // Reset to all
                                 >
                                     Chọn tất cả
+                                    </button>
+                                <button
+                                    className="text-xs text-blue-600 hover:underline"
+                                    onClick={() => onUpdateSelection(subject.subject_id, [])} // Reject all
+                                >
+                                    Xóa tất cả
                                 </button>
                             </div>
                             {classes.map(cls => {
@@ -130,7 +136,7 @@ const CourseItem = ({ subject, onRemove, selectedClassIds, onUpdateSelection }) 
                                             </span>
                                             <span className="font-mono font-bold text-gray-800">{cls.class_id}</span>
                                             <span className={`text-[10px] uppercase px-1.5 py-0.5 rounded font-bold ml-auto ${cls.class_type === 'LT' ? 'bg-blue-100 text-blue-700' :
-                                                    cls.class_type === 'BT' ? 'bg-orange-100 text-orange-700' :
+                                                    cls.class_type === 'BT' ? 'bg-orange-100 text-orange-700' : cls.class_type === 'TN' ? 'bg-red-100 text-red-700' :
                                                         'bg-gray-100 text-gray-700'
                                                 }`}>
                                                 {cls.class_type}

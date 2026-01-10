@@ -13,34 +13,38 @@ const generateTKB = async (req, res) => {
     const isObject = typeof subjectCodes === 'object' && subjectCodes !== null && !isArray;
 
     let isValid = false;
-    
+
     // Nếu là Array: Không được rỗng
     if (isArray && subjectCodes.length > 0) {
-        isValid = true;
+      isValid = true;
     }
     // Nếu là Object: Phải có ít nhất 1 key (môn học)
     else if (isObject && Object.keys(subjectCodes).length > 0) {
-        isValid = true;
+      isValid = true;
     }
 
     if (!isValid) {
-      return res.status(400).json({ 
-        message: "Vui lòng gửi danh sách môn học hợp lệ (Array mã môn hoặc Object kèm mã lớp)." 
+      return res.status(400).json({
+        message: "Vui lòng gửi danh sách môn học hợp lệ (Array mã môn hoặc Object kèm mã lớp)."
       });
     }
 
     // Log thông tin để debug
     if (isArray) {
-        console.log(`Đang xếp lịch (Mode: Auto) cho các môn: ${subjectCodes.join(", ")}...`);
+      console.log(`Đang xếp lịch (Mode: Auto) cho các môn: ${subjectCodes.join(", ")}...`);
     } else {
-        console.log(`Đang xếp lịch (Mode: Filter) cho các môn: ${Object.keys(subjectCodes).join(", ")}...`);
+      console.log(`Đang xếp lịch (Mode: Filter) cho các môn: ${Object.keys(subjectCodes).join(", ")}...`);
     }
 
     // Gọi service xử lý (Service đã update để nhận cả 2 loại input)
     const result = await generateSchedules(subjectCodes);
 
-    if (!result.success) {
-      return res.status(400).json({ message: result.message });
+    if (result.total_found === 0) {
+      return res.status(400).json({
+        message: result.message || "Không tìm thấy phương án xếp lịch nào phù hợp.",
+        count: 0,
+        schedules: []
+      });
     }
 
     // Trả kết quả thành công
@@ -48,7 +52,7 @@ const generateTKB = async (req, res) => {
       message: "Xếp lịch thành công!",
       count: result.total_found,
       is_limit_reached: result.limit_reached,
-      schedules: result.data // Danh sách các phương án
+      schedules: result.schedules // Danh sách các phương án
     });
 
   } catch (error) {
