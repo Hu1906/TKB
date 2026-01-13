@@ -45,9 +45,10 @@ async function parseExcel(filePath) {
     const subjectsMap = new Map(); // Map để lưu các học phần đã thêm
 
     rawdata.forEach(row => {
+        if (row['Trạng_thái'] === "Hủy lớp") return;
+
         const subjectId = row['Mã_HP'];
         const classId = row['Mã_lớp'];
-
         // Tạo thông tin môn học
         if (!subjectsMap.has(subjectId)) {
             subjectsMap.set(subjectId, {

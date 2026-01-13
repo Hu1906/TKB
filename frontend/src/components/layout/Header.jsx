@@ -11,7 +11,7 @@ export default function Header() {
                     </div>
                     <div>
                         <h1 className="text-xl font-bold uppercase tracking-wide">TKB HUST</h1>
-                        <p className="text-xs text-green-100 opacity-90 font-medium">Soạn thời khóa biểu siêu cấp vip pro</p>
+                        <p className="text-xs text-green-100 opacity-90 font-medium">Soạn thời khóa biểu</p>
                     </div>
                 </div>
 
