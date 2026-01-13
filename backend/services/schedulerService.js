@@ -102,7 +102,7 @@ const checkBundleConflict = (classListA, classB) => {
  * Hàm chính để sinh ra các thời khóa biểu hợp lệ từ dữ liệu đầu vào.
  * @param {Array|Object} inputData - Danh sách mã môn học (Array) hoặc Object cấu hình môn học cụ thể.
  */
-const generateSchedules = async (inputData) => {
+const generateSchedules = async (inputData, constraints = {}) => {
   try {
     let subjectCodes = [];           // Danh sách mã môn học cần xếp
     let specificClassIds = {};       // Map: Mã môn -> [Mã lớp cụ thể user chọn] (nếu có)
@@ -229,11 +229,11 @@ const generateSchedules = async (inputData) => {
 
       // 2a. Xử lý BT: Phân loại Linked vs Independent
       for (const btClass of processedBT) {
-          // Linked Pair
-          const ltClass = fullSubjectClassMap.get(btClass.includedId);
-          if (ltClass) {
-              mainBundles.push([btClass, ltClass]);
-          }
+        // Linked Pair
+        const ltClass = fullSubjectClassMap.get(btClass.includedId);
+        if (ltClass) {
+          mainBundles.push([btClass, ltClass]);
+        }
       }
 
       // 2b. Xử lý LT: Lọc ra LT độc lập (Không bị link bởi BT nào)
@@ -259,9 +259,49 @@ const generateSchedules = async (inputData) => {
         mainBundles.push([other]);
       }
 
+      // [NEW] Áp dụng Advanced Settings (Filter Bundles)
+      // Loại bỏ các bundle có bất kỳ lớp nào vi phạm constraints
+      if (constraints && Object.keys(constraints).length > 0) {
+        // Helper check constraint
+        const isBundleValid = (bundledClasses) => {
+          for (const pClass of bundledClasses) {
+            for (const session of pClass.processedSessions) {
+              // Check Morning
+              const morningKey = `${session.day}-morning`;
+              if (constraints[morningKey]) {
+                // Nếu session BẮT ĐẦU trước 1230 -> Có dính dáng buổi sáng
+                if (session.start < 1230) return false;
+              }
+
+              // Check Afternoon
+              const afternoonKey = `${session.day}-afternoon`;
+              if (constraints[afternoonKey]) {
+                // Nếu session KẾT THÚC sau 1230 -> Có dính dáng buổi chiều
+                // Lưu ý: 1230 là mốc phân chia.
+                // Ca sáng: thường <= 12h.
+                // Ca chiều: thường >= 12h30.
+                if (session.end > 1230) return false;
+              }
+            }
+          }
+          return true;
+        };
+
+        const filteredBundles = [];
+        for (const b of mainBundles) {
+          if (isBundleValid(b)) {
+            filteredBundles.push(b);
+          }
+        }
+
+        // Cập nhật mainBundles (chỉ giữ lại cái valid)
+        mainBundles.length = 0;
+        mainBundles.push(...filteredBundles);
+      }
+
       // Nếu không có bundle học thuật nào
       if (mainBundles.length === 0) {
-        return { success: false, message: `Môn học ${code} không có phương án chọn lớp Lý thuyết/Bài tập phù hợp.` };
+        return { success: false, message: `Môn học ${code} không có phương án chọn lớp Lý thuyết/Bài tập phù hợp (có thể do xung đột với cài đặt nâng cao).` };
       }
 
       // Tạo "Gói" cuối cùng (kết hợp với Lab nếu cần)

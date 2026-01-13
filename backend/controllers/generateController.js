@@ -6,7 +6,7 @@ const generateTKB = async (req, res) => {
     // Input có thể là:
     // 1. Array (Cũ): ["IT1110", "MI1111"]
     // 2. Object (Mới): { "IT1110": ["123456"], "MI1111": [] }
-    const { subjectCodes } = req.body;
+    const { subjectCodes, advancedSettings } = req.body;
 
     // --- KIỂM TRA DỮ LIỆU ĐẦU VÀO (VALIDATION) ---
     const isArray = Array.isArray(subjectCodes);
@@ -33,11 +33,11 @@ const generateTKB = async (req, res) => {
     if (isArray) {
       console.log(`Đang xếp lịch (Mode: Auto) cho các môn: ${subjectCodes.join(", ")}...`);
     } else {
-      console.log(`Đang xếp lịch (Mode: Filter) cho các môn: ${Object.keys(subjectCodes).join(", ")}...`);
+      console.log(`Đang xếp lịch (Mode: Filter) cho các môn: ${Object.keys(subjectCodes).join(", ")}... Settings: ${JSON.stringify(advancedSettings || {})}`);
     }
 
     // Gọi service xử lý (Service đã update để nhận cả 2 loại input)
-    const result = await generateSchedules(subjectCodes);
+    const result = await generateSchedules(subjectCodes, advancedSettings);
 
     if (result.total_found === 0) {
       return res.status(400).json({

@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import TimetableGrid from '../components/features/TimetableGrid';
+import ClassInfoModal from '../components/features/ClassInfoModal';
 import useScheduleStore from '../store/useScheduleStore';
 import { Calendar, ArrowLeft, ArrowRight, ArrowLeftCircle } from 'lucide-react';
 
@@ -12,6 +13,7 @@ export default function ResultPage() {
         setCurrentScheduleIndex,
         sortSchedules
     } = useScheduleStore();
+    const [isClassInfoModalOpen, setIsClassInfoModalOpen] = useState(false);
 
     // If no schedules (e.g. refresh), redirect or show message
     // Better to show message so user understands what happened
@@ -51,6 +53,14 @@ export default function ResultPage() {
                 </div>
 
                 <div className="flex items-center gap-4">
+                    <button
+                        onClick={() => setIsClassInfoModalOpen(true)}
+                        className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition text-sm shadow-sm"
+                        title="Thông tin lớp"
+                    >
+                        Thông tin lớp
+                    </button>
+
                     <select
                         className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500 bg-white cursor-pointer shadow-sm"
                         onChange={(e) => sortSchedules(e.target.value)}
@@ -88,6 +98,12 @@ export default function ResultPage() {
             <div className="flex-1 overflow-auto">
                 <TimetableGrid schedule={schedules[currentScheduleIndex]} />
             </div>
+
+            <ClassInfoModal
+                isOpen={isClassInfoModalOpen}
+                onClose={() => setIsClassInfoModalOpen(false)}
+                schedule={schedules[currentScheduleIndex]}
+            />
         </div>
     );
 }

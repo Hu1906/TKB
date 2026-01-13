@@ -17,13 +17,13 @@ export const getSubjectClasses = async (subjectId) => {
     return response.json();
 };
 
-export const generateSchedule = async (selectedSubjects) => {
+export const generateSchedule = async (payload) => {
     const response = await fetch(`${API_BASE}/generate/generate`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ subjectCodes: selectedSubjects })
+        body: JSON.stringify(payload)
     });
     if (!response.ok) {
         const errorData = await response.json();
