@@ -5,8 +5,11 @@ const { importData } = require('../controllers/importController');
 const { searchSubjects, getClassesBySubject } = require('../controllers/subjectController');
 const { generateTKB } = require('../controllers/generateController');
 
+const multer = require('multer');
+const upload = multer({ dest: 'uploads/' });
+
 // Import
-router.post('/import/upload', importData);
+router.post('/import/upload', upload.single('file'), importData);
 
 // Subjects
 router.get('/subjects/search', searchSubjects);

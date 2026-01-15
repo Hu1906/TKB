@@ -1,13 +1,19 @@
 const parseExcelService = require('../services/parseExcelService');
 const classModel = require('../models/classModel');
 const subjectModel = require('../models/subjectModel');
+const fs = require('fs');
 const path = require('path');
 
 const importData = async (req, res) => {
+    let excelPath = null;
     try {
-        // Use absolute path relative to project root or use the uploaded file if applicable
-        // valid way: path.join(__dirname, '../config/TKB20252-FULL.xlsx')
-        const excelPath = path.join(__dirname, '../config/TKB20252-FULL (2).xlsx');
+        if (!req.file) {
+            return res.status(400).json({ message: 'Vui lòng chọn file Excel để upload' });
+        }
+
+        // Use the uploaded file path
+        excelPath = req.file.path;
+        console.log('Processing uploaded file:', excelPath);
 
         const result = await parseExcelService.parseExcel(excelPath);
 
@@ -36,7 +42,16 @@ const importData = async (req, res) => {
         });
     } catch (error) {
         console.error('Error importing data:', error);
-        res.status(500).json({ message: 'Error importing data' });
+        res.status(500).json({ message: 'Error importing data: ' + error.message });
+    } finally {
+        if (excelPath && fs.existsSync(excelPath)) {
+            try {
+                fs.unlinkSync(excelPath);
+                console.log('Deleted uploaded file:', excelPath);
+            } catch (cleanupError) {
+                console.error('Error cleaning up file:', cleanupError);
+            }
+        }
     }
 };
 module.exports = { importData };
