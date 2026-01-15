@@ -23,23 +23,22 @@ function parseWeeks(weeksString) {
     return weeks;
 }
 
-// Hàm parse chuỗi thời gian
+
 function parseTime(timeString) {
     if (!timeString || typeof timeString !== 'string') return null;
     const [start, end] = timeString.split('-').map(String);
     return { start, end };
 }
 
-//Hàm xử lý file Excel và lưu vào database
+
 async function parseExcel(filePath) {
 
-    //Đọc file excel
+
     const workbook = xlsx.readFile(filePath);
     const sheetName = workbook.SheetNames[0];
     const sheet = workbook.Sheets[sheetName];
 
-    //Chuyển dữ liệu từ sheet thành JSON
-    const rawdata = xlsx.utils.sheet_to_json(sheet, { range: 2 }); // Bỏ qua 2 dòng đầu tiên (header)
+    const rawdata = xlsx.utils.sheet_to_json(sheet, { range: 2 });
 
     const classesMap = new Map(); // Map để nhóm các lớp theo class_id
     const subjectsMap = new Map(); // Map để lưu các học phần đã thêm
@@ -49,7 +48,7 @@ async function parseExcel(filePath) {
 
         const subjectId = row['Mã_HP'];
         const classId = row['Mã_lớp'];
-        // Tạo thông tin môn học
+
         if (!subjectsMap.has(subjectId)) {
             subjectsMap.set(subjectId, {
                 subject_id: subjectId,
@@ -62,7 +61,6 @@ async function parseExcel(filePath) {
             });
         }
         const time_period = parseTime(row['Thời_gian']);
-        // Xử lý thông tin buổi học (Sessions)
         const session = {
             day: row['Thứ'] ? Number(row['Thứ']) : null,
             start_time: time_period ? time_period.start : null,
@@ -74,7 +72,6 @@ async function parseExcel(filePath) {
             const existingClass = classesMap.get(classId);
             if (session.day) existingClass.sessions.push(session);
         } else {
-            // Tạo mới thông tin lớp học
             classesMap.set(classId, {
                 class_id: classId,
                 subject_id: subjectId,

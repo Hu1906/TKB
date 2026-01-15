@@ -26,26 +26,92 @@ const getGridRow = (minutes) => {
 
 export default function TimetableGrid({ schedule }) {
     const gridData = useMemo(() => {
-        const cells = [];
         if (!schedule) return [];
 
+        // 1. Flatten schedule into list of event objects
+        let allEvents = [];
         schedule.forEach(cls => {
             cls.sessions.forEach(sess => {
                 const startMin = timeToMinutes(sess.start_time);
                 const endMin = timeToMinutes(sess.end_time);
-
-                const startRow = getGridRow(startMin);
-
-                cells.push({
+                allEvents.push({
                     day: sess.day,
                     startMin,
                     endMin,
                     cls,
-                    sess
+                    sess,
+                    // Temp properties for layout
+                    id: Math.random().toString(36).substr(2, 9)
                 });
             });
         });
-        return cells;
+
+        // 2. Process each day independently to calculate layout
+        const finalEvents = [];
+        const days = [2, 3, 4, 5, 6, 7, 8];
+
+        days.forEach(day => {
+            const dayEvents = allEvents.filter(e => e.day === day);
+            if (dayEvents.length === 0) return;
+
+            // Sort by start time, then duration
+            dayEvents.sort((a, b) => {
+                if (a.startMin !== b.startMin) return a.startMin - b.startMin;
+                return (b.endMin - b.startMin) - (a.endMin - a.startMin);
+            });
+
+            // Group into overlapping clusters
+            const clusters = [];
+            let currentCluster = [];
+            let clusterEnd = -1;
+
+            dayEvents.forEach(event => {
+                if (currentCluster.length === 0) {
+                    currentCluster.push(event);
+                    clusterEnd = event.endMin;
+                } else {
+                    if (event.startMin < clusterEnd) {
+                        currentCluster.push(event);
+                        clusterEnd = Math.max(clusterEnd, event.endMin);
+                    } else {
+                        clusters.push(currentCluster);
+                        currentCluster = [event];
+                        clusterEnd = event.endMin;
+                    }
+                }
+            });
+            if (currentCluster.length > 0) clusters.push(currentCluster);
+
+            // layout each cluster
+            clusters.forEach(cluster => {
+                const columns = []; // stores end_time of the last event in each column
+                cluster.forEach(event => {
+                    let placed = false;
+                    for (let i = 0; i < columns.length; i++) {
+                        if (event.startMin >= columns[i]) {
+                            columns[i] = event.endMin;
+                            event.colIndex = i;
+                            placed = true;
+                            break;
+                        }
+                    }
+                    if (!placed) {
+                        columns.push(event.endMin);
+                        event.colIndex = columns.length - 1;
+                    }
+                });
+
+                const numCols = columns.length;
+                cluster.forEach(event => {
+                    event.widthPct = 100 / numCols;
+                    event.leftPct = event.colIndex * event.widthPct;
+                });
+            });
+
+            finalEvents.push(...dayEvents);
+        });
+
+        return finalEvents;
     }, [schedule]);
 
     const days = [2, 3, 4, 5, 6, 7, 8];
@@ -125,10 +191,12 @@ export default function TimetableGrid({ schedule }) {
                                 return (
                                     <div
                                         key={idx}
-                                        className={`absolute left-1 right-1 rounded border shadow-sm p-1.5 flex flex-col justify-start overflow-hidden text-[10px] leading-tight cursor-pointer transition-all z-10 hover:z-50 hover:shadow-md ${getCellColor(item.cls.class_type)}`}
+                                        className={`absolute rounded border shadow-sm p-1.5 flex flex-col justify-start overflow-hidden text-[10px] leading-tight cursor-pointer transition-all z-10 hover:z-50 hover:shadow-md ${getCellColor(item.cls.class_type)}`}
                                         style={{
                                             top: `${topPct}%`,
                                             height: `${heightPct}%`,
+                                            left: `${item.leftPct}%`,
+                                            width: `${item.widthPct}%`,
                                         }}
                                         title={`${item.cls.class_id} (${item.cls.class_type})\n${item.cls.subject_id}\n${item.sess.start_time} - ${item.sess.end_time}\nPhòng: ${item.sess.room}\nNote: ${item.cls.note || ''}`}
                                     >

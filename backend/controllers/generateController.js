@@ -2,10 +2,6 @@ const { generateSchedules } = require('../services/schedulerService');
 
 const generateTKB = async (req, res) => {
   try {
-    // Lấy dữ liệu từ body request
-    // Input có thể là:
-    // 1. Array (Cũ): ["IT1110", "MI1111"]
-    // 2. Object (Mới): { "IT1110": ["123456"], "MI1111": [] }
     const { subjectCodes, advancedSettings } = req.body;
 
     // --- KIỂM TRA DỮ LIỆU ĐẦU VÀO (VALIDATION) ---
@@ -31,12 +27,11 @@ const generateTKB = async (req, res) => {
 
     // Log thông tin để debug
     if (isArray) {
-      console.log(`Đang xếp lịch (Mode: Auto) cho các môn: ${subjectCodes.join(", ")}...`);
+      console.log(`Đang xếp lịch (Mode: Auto): ${subjectCodes.join(", ")}...`);
     } else {
-      console.log(`Đang xếp lịch (Mode: Filter) cho các môn: ${Object.keys(subjectCodes).join(", ")}... Settings: ${JSON.stringify(advancedSettings || {})}`);
+      console.log(`Đang xếp lịch (Mode: Filter): ${Object.keys(subjectCodes).join(", ")}...`);
     }
 
-    // Gọi service xử lý (Service đã update để nhận cả 2 loại input)
     const result = await generateSchedules(subjectCodes, advancedSettings);
 
     if (result.total_found === 0) {

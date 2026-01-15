@@ -1,33 +1,21 @@
-const ClassModel = require('../models/classModel'); // Import model ClassModel để thao tác với cơ sở dữ liệu lớp học
-const SubjectModel = require('../models/subjectModel'); // Import model SubjectModel để lấy thông tin môn học
+const ClassModel = require('../models/classModel');
+const SubjectModel = require('../models/subjectModel');
 
-// ---------------------------------------------------------
-// PHẦN 1: CÁC HÀM TIỆN ÍCH & TÍNH TOÁN TRƯỚC (UTILS & PRE-COMPUTATION)
-// ---------------------------------------------------------
+
 
 /**
- * Hàm tiền xử lý dữ liệu lớp học để kiểm tra xung đột nhanh hơn.
- * - Chuyển đổi danh sách tuần học thành BitMask (BigInt) để so sánh tuần nhanh.
- * - Chuyển đổi thời gian bắt đầu/kết thúc thành dạng số nguyên (integer) để so sánh thời gian.
+ * Hàm tiền xử lý dữ liệu lớp học: danh sách tuần thành BitMask, thời gian thành số nguyên.
  */
 const processClassData = (cls) => {
-  // 1. Xử lý danh sách các phiên học (Sessions) của lớp
   const processedSessions = cls.sessions.map(sess => {
     // Tạo Bitmask cho các tuần học
-    // Ví dụ: sess.weeks = [1, 2, 3] -> sẽ được chuyển thành bitmask: 2^1 | 2^2 | 2^3
-    let weekMask = 0n; // Khởi tạo weekMask là 0 (BigInt)
+    let weekMask = 0n;
     if (sess.weeks) {
-      // Duyệt qua từng tuần học trong mảng weeks
       for (const w of sess.weeks) {
-        // Bật bit tại vị trí tương ứng với tuần học 'w'
-        // Phép toán (1n << BigInt(...)) tạo ra một số có bit thứ w là 1
-        // Phép toán |= (OR) gộp bit đó vào mask tổng
         weekMask |= (1n << BigInt(Math.floor(w)));
       }
     }
 
-    // Chuyển đổi chuỗi thời gian sang số nguyên để dễ so sánh
-    // Ví dụ: "1230" thành 1230
     const start = parseInt(sess.start_time);
     const end = parseInt(sess.end_time);
 
@@ -42,39 +30,30 @@ const processClassData = (cls) => {
 
   // Trả về cấu trúc dữ liệu lớp học đã được tối ưu hóa
   return {
-    id: cls.class_id,       // Mã lớp
-    subject_id: cls.subject_id, // Mã môn học
-    type: cls.class_type,   // [Mới] Loại lớp (LT, BT, ...)
-    includedId: cls.class_included_id, // [Mới] Mã lớp đi kèm (nếu có)
-    processedSessions,      // Danh sách session đã xử lý
-    original: cls           // Giữ lại dữ liệu gốc
+    id: cls.class_id,
+    subject_id: cls.subject_id,
+    type: cls.class_type,
+    includedId: cls.class_included_id,
+    processedSessions,
+    original: cls
   };
 };
 
 /**
- * Hàm kiểm tra xem hai lớp đã xử lý (processed classes) có bị xung đột lịch hay không.
- * Độ phức tạp: O(N*M) trong đó N, M là số buổi học của mỗi lớp (thường rất nhỏ, 1-3).
- * Sử dụng Bitwise operations (phép toán bit) để kiểm tra trùng tuần cực nhanh.
+ * Kiểm tra xung đột lịch giữa 2 lớp sử dụng Bitwise operations.
  */
 const checkConflict = (pClassA, pClassB) => {
-  // Duyệt qua từng session (buổi học) của lớp A
+  // Duyệt qua từng session (buổi học)
   for (const sA of pClassA.processedSessions) {
-    // Duyệt qua từng session (buổi học) của lớp B
     for (const sB of pClassB.processedSessions) {
-      // Nếu không cùng ngày học thì chắc chắn không trùng -> bỏ qua
       if (sA.day !== sB.day) continue;
 
-      // Kiểm tra xem có trùng tuần học nào không bằng phép Bitwise AND (&)
-      // Nếu kết quả là 0n nghĩa là không có bit nào chung -> không trùng tuần -> bỏ qua
+      // Kiểm tra trùng tuần bằng Bitwise AND
       if ((sA.weekMask & sB.weekMask) === 0n) continue;
 
-      // Đến đây là: Cùng ngày VÀ Cùng tuần.
-      // Sẽ kiểm tra tiếp xem có trùng giờ (Time Overlap) hay không.
-
-      // Logic kiểm tra trùng: khoảng [startA, endA] giao với [startB, endB]
-      // Nếu (endA >= startB) VÀ (endB >= startA) thì là có giao nhau.
+      // Kiểm tra trùng giờ
       if (sA.end >= sB.start && sB.end >= sA.start) {
-        return true; // Xung đột tìm thấy
+        return true;
       }
     }
   }
@@ -94,9 +73,7 @@ const checkBundleConflict = (classListA, classB) => {
 }
 
 
-// ---------------------------------------------------------
-// PHẦN 2: THUẬT TOÁN QUAY LUI (OPTIMIZED BACKTRACKING)
-// ---------------------------------------------------------
+
 
 /**
  * Hàm chính để sinh ra các thời khóa biểu hợp lệ từ dữ liệu đầu vào.
@@ -121,28 +98,23 @@ const generateSchedules = async (inputData, constraints = {}) => {
       return { success: false, message: "Không có môn học nào được chọn." };
     }
 
-    // 1. Lấy dữ liệu từ Database (Fetch Data)
-    // 1a. Lấy thông tin Môn học (để check required_lab)
+    // Lấy dữ liệu từ Database (Fetch Data)
+    // Lấy thông tin Môn học (để check required_lab)
     const subjects = await SubjectModel.find({ subject_id: { $in: subjectCodes } });
     const subjectInfoMap = new Map();
     subjects.forEach(s => subjectInfoMap.set(s.subject_id, s));
 
-    // 1b. Lấy tất cả các lớp học
+    // Lấy tất cả các lớp học
     const allClasses = await ClassModel.find({
       subject_id: { $in: subjectCodes }
     });
 
     console.log(`[DEBUG] Đã lấy ${allClasses.length} lớp cho các môn: ${subjectCodes.join(", ")}`);
 
-    // 2. Nhóm, Lọc và Tiền xử lý dữ liệu (Group & Filter & Pre-process)
-    const candidatesBySubject = {}; // Object lưu trữ: { Mã môn: [ [Class1, Class2,...], [Option2]... ] }
-    // Lưu ý: Bây giờ mỗi "Candidate" là một mảng các lớp (Bundle) chứ không phải 1 lớp đơn lẻ.
-
-    let totalOptions = 0;        // Tổng số lượng phương án chọn
+    const candidatesBySubject = {};
+    let totalOptions = 0;
 
     // Tiền xử lý Conflict Matrix (Global)
-    // Ta xây dựng Global Conflict Map cho tất cả các lớp tham gia (đã processed)
-    // Để dùng nhanh trong Backtracking
     const globalConflictMap = new Map();
 
     // Helper: Add to conflict map
@@ -176,11 +148,11 @@ const generateSchedules = async (inputData, constraints = {}) => {
       });
 
       // Phân loại các lớp
-      const processedTN = [];   // Danh sách lớp Thí nghiệm
-      const processedBT = [];   // Danh sách lớp Bài tập
-      const processedLT = [];   // Danh sách lớp Lý thuyết
-      const processedCombined = []; // Danh sách lớp kết hợp (LT+BT)
-      const processedOthers = []; // Các loại khác
+      const processedTN = [];   // Thí nghiệm
+      const processedBT = [];   // Bài tập
+      const processedLT = [];   // Lý thuyết
+      const processedCombined = []; // LT+BT
+      const processedOthers = [];
 
       const linkedLTIds = new Set(); // Set chứa các mã lớp LT đã được lớp BT tham chiếu
 
@@ -245,8 +217,7 @@ const generateSchedules = async (inputData, constraints = {}) => {
         }
       }
 
-      // 2d. Xử lý trường hợp chỉ có LT (Không có BT nào trong môn)
-      // Nếu môn học có BT (Linked hoặc Free) hoặc Combined -> System ưu tiên chọn cặp.
+      // 2d. Nếu môn học có BT hoặc Combined -> ưu tiên chọn cặp.
       // Nếu không có BT nào -> Chấp nhận LT lẻ.
       if (!hasAnyBT && !hasAnyCombined) {
         for (const lt of freeLT) {
@@ -254,34 +225,21 @@ const generateSchedules = async (inputData, constraints = {}) => {
         }
       }
 
-      // 3. Các loại khác
+      // Các loại khác
       for (const other of processedOthers) {
         mainBundles.push([other]);
       }
 
       // [NEW] Áp dụng Advanced Settings (Filter Bundles)
-      // Loại bỏ các bundle có bất kỳ lớp nào vi phạm constraints
       if (constraints && Object.keys(constraints).length > 0) {
-        // Helper check constraint
         const isBundleValid = (bundledClasses) => {
           for (const pClass of bundledClasses) {
             for (const session of pClass.processedSessions) {
-              // Check Morning
               const morningKey = `${session.day}-morning`;
-              if (constraints[morningKey]) {
-                // Nếu session BẮT ĐẦU trước 1230 -> Có dính dáng buổi sáng
-                if (session.start < 1230) return false;
-              }
+              if (constraints[morningKey] && session.start < 1230) return false;
 
-              // Check Afternoon
               const afternoonKey = `${session.day}-afternoon`;
-              if (constraints[afternoonKey]) {
-                // Nếu session KẾT THÚC sau 1230 -> Có dính dáng buổi chiều
-                // Lưu ý: 1230 là mốc phân chia.
-                // Ca sáng: thường <= 12h.
-                // Ca chiều: thường >= 12h30.
-                if (session.end > 1230) return false;
-              }
+              if (constraints[afternoonKey] && session.end > 1230) return false;
             }
           }
           return true;
@@ -293,8 +251,6 @@ const generateSchedules = async (inputData, constraints = {}) => {
             filteredBundles.push(b);
           }
         }
-
-        // Cập nhật mainBundles (chỉ giữ lại cái valid)
         mainBundles.length = 0;
         mainBundles.push(...filteredBundles);
       }
@@ -343,10 +299,7 @@ const generateSchedules = async (inputData, constraints = {}) => {
       totalOptions += subjectBundles.length;
     }
 
-    // 3. Xây dựng Ma trận xung đột (Conflict Matrix)
-    // Build cho tất cả các lớp đã xuất hiện trong các candidates
-    // (Thực ra ta có thể build cho toàn bộ allProcessedClasses để bao quát hết)
-
+    // Xây dựng Ma trận xung đột (Conflict Matrix)
     allProcessedClasses.forEach(c => addToGlobalConflictMap(c));
 
     for (let i = 0; i < allProcessedClasses.length; i++) {
@@ -354,8 +307,6 @@ const generateSchedules = async (inputData, constraints = {}) => {
         const cA = allProcessedClasses[i];
         const cB = allProcessedClasses[j];
 
-        // Cùng môn thì coi như không cần check conflict ở đây (vì Backtracking chọn 1 bundle cho 1 môn)
-        // (Trừ khi trong bundle có nhiều lớp, nhưng ta đã check bundle valid ở bước 2 rồi)
         if (cA.subject_id === cB.subject_id) continue;
 
         if (checkConflict(cA, cB)) {
@@ -365,10 +316,10 @@ const generateSchedules = async (inputData, constraints = {}) => {
       }
     }
 
-    // 4. Sắp xếp môn học (MRV)
+    // Sắp xếp môn học (MRV)
     subjectCodes.sort((a, b) => candidatesBySubject[a].length - candidatesBySubject[b].length);
 
-    // 5. Quay lui (Backtracking)
+    // Quay lui (Backtracking)
     const validSchedules = [];
     const LIMIT_RESULTS = 1000;
 

@@ -71,53 +71,6 @@ const useScheduleStore = create((set, get) => ({
             };
 
             console.log("Sending payload:", requestBody);
-            // Assuming generateSchedule api takes the whole body or we need to update api service?
-            // The existing api usage in useScheduleStore passed 'payload' which was just the subject mapping.
-            // Let's check api.js content first if possible, but assuming standard post:
-            // I will update existing call. If api.js expects just 'subjectCodes', I might need to change api.js too.
-            // But previous code was: generateSchedule(payload).
-
-            // Wait, looking at generateController.js: const { subjectCodes } = req.body;
-            // It expects an object with subjectCodes property if valid.
-            // BUT wait, existing controller logic:
-            // const { subjectCodes } = req.body;
-            // CHECK CONTROLLER AGAIN.
-
-            // Controller: 
-            // const { subjectCodes } = req.body;
-            // if (isArray) ... 
-
-            // So if I send { subjectCodes: {...}, advancedSettings: {...} } it should be fine.
-            // However, previously `payload` was assigned to `subjectCodes` probably?
-            // Let's check api.js or how it was called.
-            // Previous call: generateSchedule(payload).
-            // Payload was { "IT1110": ... }.
-            // So req.body WAS the payload? 
-            // If req.body IS the payload, then req.body.subjectCodes would be undefined if I just sent { "IT1110": ... }.
-            // UNLESS the previous payload was WRAPPED in { subjectCodes: ... } inside api.js?
-
-            // Let's assume api.js wraps it or I should wrap it here.
-            // If I look at generateController.js:
-            // const { subjectCodes } = req.body;
-            // This implies req.body MUST have subjectCodes.
-
-            // So current store implementation:
-            // const result = await generateSchedule(payload);
-            // If payload is { "IT1110": ... }, then req.body is { "IT1110": ... }.
-            // Then const { subjectCodes } = req.body -> subjectCodes is undefined?
-            // This suggests generateController might have been designed for { subjectCodes: [...] } BUT
-            // checks `isObject` logic:
-            // const isObject = typeof subjectCodes === 'object' ... 
-            // This line implies subjectCodes ITSELF is the object? No.
-            // It gets subjectCodes FROM req.body.
-
-            // So for the current code to work, either:
-            // 1. api.js wraps the data in { subjectCodes: data }
-            // 2. The controller handles req.body directly? 
-            //    No, `const { subjectCodes } = req.body;` is explicit.
-
-            // I'll assume api.js handles the wrapping or I should strictly pass { subjectCodes, advancedSettings }.
-            // I will use a cleaner object structure now.
 
             const result = await generateSchedule(requestBody);
 
